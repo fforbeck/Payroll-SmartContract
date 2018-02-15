@@ -20,6 +20,7 @@ contract Payroll is PayrollInterface {
         address[] allowedTokens;
         mapping(address => uint256) allowedTokensMap;
         mapping(address => uint256) pendingWithdraws;
+        mapping(address => Token) selectedTokens;
     }
 
     /* PAYROLL STATE */
@@ -35,12 +36,8 @@ contract Payroll is PayrollInterface {
 
     Token private tokenEUR;
     mapping(address => Token) private tokensMap;
-    mapping(address => mapping(address => Token)) private employeeSelectedTokensMap;
     mapping(address => Employee) private employeesMap;
     uint256 private totalYearlyEURSalary;
-    uint256 private totalFundsETH;
-
-
 
     /* CONSTRUCTOR */
     function Payroll(address _defaultOracle, address _tokenEURAddress, uint256 _EURExchangeRate)
@@ -112,7 +109,7 @@ contract Payroll is PayrollInterface {
     /* @dev default fallback function to prevent from sending ether to the contract
      * @dev the contract works only with allowed tokens
      */
-    function() external {revert();}
+    function() external payable {revert();}
 
     /* @dev ERC223 token fallback function, rejects if token not supported */
     function tokenFallback(address _from, uint256 _value, bytes _data)
@@ -135,130 +132,12 @@ contract Payroll is PayrollInterface {
         LogSupportedTokenAdded(getTime(), tokensMap[_token].id, tokensMap[_token].exchangeRate);
     }
 
-   event LogA(address token);
-    /* @dev Checks if the provided token is supported in the payroll */
-    function isSupportedToken(address _token)
-    external
-    onlyByOwner
-    returns (bool)
-    {
-        LogA(_token);
-        return supports(_token);
-    }
-
     /* @dev returns ERC20 tokens to contract owner */
     function claimTokenFunds(address tokenAddress)
     external
     onlyByOwner {
         ERC20Basic token = ERC20Basic(tokenAddress);
-        token.transfer(owner, token.balanceOf(this));
-    }
-
-    /* @dev Adds an employee into the payroll if it is not already registered and has valid tokens and salary */
-    function addEmployee(address _employeeAddress, uint256 _initialYearlyEURSalary)
-    external
-    onlyByOwner
-    onlyNotRegistered(_employeeAddress)
-    onlyPositive(_initialYearlyEURSalary)
-    {
-        employeeCount++;
-        totalYearlyEURSalary = totalYearlyEURSalary + _initialYearlyEURSalary;
-        employeesMap[_employeeAddress] = Employee(_employeeAddress, _initialYearlyEURSalary, 0, new address[](0));
-        LogEmployeeAdded(_employeeAddress, _initialYearlyEURSalary, totalYearlyEURSalary);
-    }
-
-    /* @dev Updated the employee annual salary if it is registered in the payroll */
-    function setEmployeeSalary(address _employeeAddress, uint256 _newYearlyEURSalary)
-    external
-    onlyByOwner
-    onlyRegistered(_employeeAddress)
-    onlyPositive(_newYearlyEURSalary)
-    {
-        uint256 oldSalary = employeesMap[_employeeAddress].yearlyEURSalary;
-        totalYearlyEURSalary = totalYearlyEURSalary - oldSalary + _newYearlyEURSalary;
-        employeesMap[_employeeAddress].yearlyEURSalary = _newYearlyEURSalary;
-        LogEmployeeSalaryUpdated(_employeeAddress, oldSalary, _newYearlyEURSalary, totalYearlyEURSalary);
-    }
-
-    /* @dev Removes the employee from the payroll if it is registered in the payroll */
-    function removeEmployee(address _employeeAddress)
-    external
-    onlyByOwner
-    onlyRegistered(_employeeAddress)
-    {
-        employeeCount = employeeCount - 1;
-        totalYearlyEURSalary = totalYearlyEURSalary - employeesMap[_employeeAddress].yearlyEURSalary;
-        delete employeesMap[_employeeAddress];
-        LogEmployeeRemoved(_employeeAddress);
-    }
-
-    /* @dev Gets the total number of employees registered in the payroll */
-    function getEmployeeCount()
-    external constant
-    onlyByOwner
-    returns (uint256)
-    {
-        return employeeCount;
-    }
-
-    /* @dev Gets the employee data if the employee is registered in the payroll */
-    function getEmployee(address _employeeAddress)
-    external constant
-    onlyByOwner
-    onlyRegistered(_employeeAddress)
-    returns (
-        uint256 _yearlyEURSalary,
-        uint256 _totalReceivedEUR,
-        address[] _allowedTokens)
-    {
-        Employee memory employee = employeesMap[_employeeAddress];
-        return (employee.yearlyEURSalary,
-        employee.totalReceivedEUR,
-        employee.allowedTokens);
-    }
-
-    /* @dev Allows a given token for a given employee */
-    function allowToken(address _employeeAddress, address _token, uint256 _exchangeRate)
-    external
-    onlyByOwner
-    onlyRegistered(_employeeAddress)
-    onlyIfSupported(_token)
-    onlyPositive(_exchangeRate)
-    {
-        tokensMap[_token] = Token(_token, _exchangeRate, 0, 0, 0);
-        employeeSelectedTokensMap[_employeeAddress][_token] = tokensMap[_token];
-
-        Employee storage employee = employeesMap[_employeeAddress];
-        if (employee.allowedTokens.length == 0) {
-            employee.allowedTokens = new address[](0);
-        }
-
-        employee.allowedTokens.push(_token);
-        employee.allowedTokensMap[_token] = 1;
-
-        LogTokenAllowed(getTime(), _employeeAddress, _token, _exchangeRate);
-    }
-
-    /* @dev Gets the employee payment details based on token */
-    function getEmployeePayment(address _employeeAddress, address _token)
-    external
-    constant
-    onlyByOwner
-    onlyRegistered(_employeeAddress)
-    onlyIfSupported(_token)
-    returns (
-        uint256 _exchangeRate,
-        uint _lastAllocationTime,
-        uint _lastPaymentTime,
-        uint256 _distributionPercent)
-    {
-        Token memory token = employeeSelectedTokensMap[_employeeAddress][_token];
-        require(token.id != address(0x0));
-
-        return (token.exchangeRate,
-        token.lastAllocationTime,
-        token.lastPaymentTime,
-        token.distributionPercent);
+        require(token.transfer(owner, token.balanceOf(this)));
     }
 
     /* @dev Calculates the monthly EUR amount spent in salaries */
@@ -320,6 +199,113 @@ contract Payroll is PayrollInterface {
         //sends remaining funds back to owner of the contract
     }
 
+    /* @dev Adds an employee into the payroll if it is not already registered and has valid tokens and salary */
+    function addEmployee(address _employeeAddress, uint256 _initialYearlyEURSalary)
+    external
+    onlyByOwner
+    onlyNotRegistered(_employeeAddress)
+    onlyPositive(_initialYearlyEURSalary)
+    {
+        employeeCount++;
+        totalYearlyEURSalary = totalYearlyEURSalary + _initialYearlyEURSalary;
+        employeesMap[_employeeAddress] = Employee(_employeeAddress, _initialYearlyEURSalary, 0, new address[](0));
+        LogEmployeeAdded(_employeeAddress, _initialYearlyEURSalary, totalYearlyEURSalary);
+    }
+
+    /* @dev Gets the employee data if the employee is registered in the payroll */
+    function getEmployee(address _employeeAddress)
+    external constant
+    onlyByOwner
+    onlyRegistered(_employeeAddress)
+    returns (
+        uint256 _yearlyEURSalary,
+        uint256 _totalReceivedEUR,
+        address[] _allowedTokens)
+    {
+        Employee memory employee = employeesMap[_employeeAddress];
+        return (employee.yearlyEURSalary,
+        employee.totalReceivedEUR,
+        employee.allowedTokens);
+    }
+
+    /* @dev Removes the employee from the payroll if it is registered in the payroll */
+    function removeEmployee(address _employeeAddress)
+    external
+    onlyByOwner
+    onlyRegistered(_employeeAddress)
+    {
+        employeeCount = employeeCount - 1;
+        totalYearlyEURSalary = totalYearlyEURSalary - employeesMap[_employeeAddress].yearlyEURSalary;
+        delete employeesMap[_employeeAddress];
+        LogEmployeeRemoved(_employeeAddress);
+    }
+
+    /* @dev Updated the employee annual salary if it is registered in the payroll */
+    function setEmployeeSalary(address _employeeAddress, uint256 _newYearlyEURSalary)
+    external
+    onlyByOwner
+    onlyRegistered(_employeeAddress)
+    onlyPositive(_newYearlyEURSalary)
+    {
+        uint256 oldSalary = employeesMap[_employeeAddress].yearlyEURSalary;
+        totalYearlyEURSalary = totalYearlyEURSalary - oldSalary + _newYearlyEURSalary;
+        employeesMap[_employeeAddress].yearlyEURSalary = _newYearlyEURSalary;
+        LogEmployeeSalaryUpdated(_employeeAddress, oldSalary, _newYearlyEURSalary, totalYearlyEURSalary);
+    }
+
+    /* @dev Gets the total number of employees registered in the payroll */
+    function getEmployeeCount()
+    external constant
+    onlyByOwner
+    returns (uint256)
+    {
+        return employeeCount;
+    }
+
+    /* @dev Gets the employee payment details based on token */
+    function getEmployeePayment(address _employeeAddress, address _token)
+    external
+    constant
+    onlyByOwner
+    onlyRegistered(_employeeAddress)
+    onlyIfSupported(_token)
+    returns (
+        uint256 _exchangeRate,
+        uint _lastAllocationTime,
+        uint _lastPaymentTime,
+        uint256 _distributionPercent)
+    {
+        Token memory token = employeesMap[_employeeAddress].selectedTokens[_token];
+        require(token.id != address(0x0));
+
+        return (token.exchangeRate,
+        token.lastAllocationTime,
+        token.lastPaymentTime,
+        token.distributionPercent);
+    }
+
+    /* @dev Allows a given token for a given employee */
+    function allowToken(address _employeeAddress, address _token, uint256 _exchangeRate)
+    external
+    onlyByOwner
+    onlyRegistered(_employeeAddress)
+    onlyIfSupported(_token)
+    onlyPositive(_exchangeRate)
+    {
+         Employee storage employee = employeesMap[_employeeAddress];
+         tokensMap[_token] = Token(_token, _exchangeRate, 0, 0, 0);
+         employee.selectedTokens[_token] = tokensMap[_token];
+
+        if (employee.allowedTokens.length == 0) {
+            employee.allowedTokens = new address[](0);
+        }
+
+        employee.allowedTokens.push(_token);
+        employee.allowedTokensMap[_token] = 1;
+
+        LogTokenAllowed(getTime(), _employeeAddress, _token, _exchangeRate);
+    }
+
     /* EMPLOYEE ONLY */
 
     /* @dev Allows employees to set their tokens distribution for payments */
@@ -332,8 +318,7 @@ contract Payroll is PayrollInterface {
         require(_distributionPercent >= 0 && _distributionPercent <= 100);
 
         Employee storage employee = employeesMap[msg.sender];
-        mapping(address => Token) employeeTokens = employeeSelectedTokensMap[employee.id];
-        Token storage token = employeeTokens[_token];
+        Token storage token = employee.selectedTokens[_token];
         require(getTime() - 6 * 4 weeks > token.lastAllocationTime);
 
         token.distributionPercent = _distributionPercent;
@@ -352,8 +337,7 @@ contract Payroll is PayrollInterface {
     onlyIfAllowed(_token)
     {
         Employee storage employee = employeesMap[msg.sender];
-        mapping(address => Token) employeeTokens = employeeSelectedTokensMap[employee.id];
-        Token storage token = employeeTokens[_token];
+        Token storage token = employee.selectedTokens[_token];
         require(getTime() - 1 * 4 weeks > token.lastPaymentTime);
 
         uint256 distributedEURSalary = (employee.yearlyEURSalary / 12) * (token.distributionPercent / 100);
@@ -361,12 +345,9 @@ contract Payroll is PayrollInterface {
         uint256 tokenFunds = ERC20Basic(_token).balanceOf(this);
         require(tokenSalary <  tokenFunds);
 
-        uint256 ethSalary = distributedEURSalary / tokenEUR.exchangeRate;
-
         employee.pendingWithdraws[token.id] = tokenSalary;
         token.lastPaymentTime = getTime();
 
-        totalFundsETH = totalFundsETH - ethSalary;
         employeesMap[msg.sender] = employee;
 
         LogPaymentReceived(getTime(), msg.sender, _token, tokenSalary);
@@ -436,11 +417,10 @@ contract Payroll is PayrollInterface {
     returns (uint256)
     {
         Employee storage employee = employeesMap[msg.sender];
-        mapping(address => Token) employeeTokens = employeeSelectedTokensMap[_employeeAddress];
         uint256 total = 0;
         address[] storage tokenList = employee.allowedTokens;
         for (uint i = 0; i < tokenList.length; i++) {
-            total += employeeTokens[tokenList[i]].distributionPercent;
+            total += employee.selectedTokens[tokenList[i]].distributionPercent;
         }
         return total;
     }
