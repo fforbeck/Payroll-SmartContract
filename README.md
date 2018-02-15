@@ -10,7 +10,9 @@ Besides that, the owner is able to block/allow payments in case of an emergency.
 
 
 ### Constructor
-- [x] **Payroll(defaultOracleAddr, tokenEURAddress, exchangeRateEUR)**: default constructor with oracle address and default EUR token details
+```solidity
+function Payroll(address _defaultOracle, address _tokenEURAddress, uint256 _EURExchangeRate) //default constructor with oracle address and default EUR token details
+```
 
 ### Owner Functions
 ```solidity
