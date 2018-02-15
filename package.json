@@ -1,5 +1,5 @@
 {
-  "name": "payroll-smart-contract",
+  "name": "payroll-smartcontract",
   "version": "1.0.0",
   "description": "Solidity smart contract to manage a payroll",
   "main": "truffle.js",
@@ -11,15 +11,14 @@
     "babel-register": "^6.26.0",
     "zeppelin-solidity": "^1.6.0"
   },
-  "devDependencies": {
-  },
+  "devDependencies": {},
   "scripts": {
     "test": "truffle test",
     "ganache-cli": "./scripts/ganache-cli.sh"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/fforbeck/payroll-smart-contract.git"
+    "url": "git+https://github.com/fforbeck/Payroll-SmartContract.git"
   },
   "keywords": [
     "solidity",
@@ -30,7 +29,7 @@
   "author": "Felipe Forbeck",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/fforbeck/payroll-smart-contract/issues"
+    "url": "https://github.com/fforbeck/Payroll-SmartContract/issues"
   },
   "homepage": "https://github.com/fforbeck/payroll-smart-contract#readme"
 }
