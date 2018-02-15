@@ -1,4 +1,4 @@
-https://travis-ci.com/fforbeck/Payroll-SmartContract.svg?token=QwGVaghZwghs8qEgGeyu&branch=master
+[![Build Status](https://travis-ci.com/fforbeck/Payroll-SmartContract.svg?token=QwGVaghZwghs8qEgGeyu&branch=master)](https://travis-ci.com/fforbeck/Payroll-SmartContract)
 
 # Payroll Smart Contract
 This is a solidity smart contract to manage a payroll based on ERC20 tokens. The contract owner may
