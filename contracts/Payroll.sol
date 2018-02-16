@@ -21,6 +21,7 @@ contract Payroll is PayrollInterface {
         mapping(address => uint256) allowedTokensMap;
         mapping(address => uint256) pendingWithdraws;
         mapping(address => Token) selectedTokens;
+        uint256 totalDistributed;
     }
 
     /* PAYROLL STATE */
@@ -208,7 +209,7 @@ contract Payroll is PayrollInterface {
     {
         employeeCount++;
         totalYearlyEURSalary = totalYearlyEURSalary + _initialYearlyEURSalary;
-        employeesMap[_employeeAddress] = Employee(_employeeAddress, _initialYearlyEURSalary, 0, new address[](0));
+        employeesMap[_employeeAddress] = Employee(_employeeAddress, _initialYearlyEURSalary, 0, new address[](0), 0);
         LogEmployeeAdded(_employeeAddress, _initialYearlyEURSalary, totalYearlyEURSalary);
     }
 
@@ -315,16 +316,15 @@ contract Payroll is PayrollInterface {
     onlyIfPayments(State.Allowed)
     onlyIfAllowed(_token)
     {
-        require(_distributionPercent >= 0 && _distributionPercent <= 100);
-
         Employee storage employee = employeesMap[msg.sender];
+        require(_distributionPercent >= 0 && employee.totalDistributed + _distributionPercent <= 100);
+
         Token storage token = employee.selectedTokens[_token];
         require(getTime() - 6 * 4 weeks > token.lastAllocationTime);
 
         token.distributionPercent = _distributionPercent;
         token.lastAllocationTime = getTime();
-
-        assert(calculateTokenDistribution(employee.id) == 100);
+        employee.totalDistributed += _distributionPercent;
 
         LogPaymentDistributionUpdated(getTime(), employee.id, token.id, token.distributionPercent);
     }
@@ -411,17 +411,4 @@ contract Payroll is PayrollInterface {
         return now;
     }
 
-    function calculateTokenDistribution(address _employeeAddress)
-    internal
-    constant
-    returns (uint256)
-    {
-        Employee storage employee = employeesMap[msg.sender];
-        uint256 total = 0;
-        address[] storage tokenList = employee.allowedTokens;
-        for (uint i = 0; i < tokenList.length; i++) {
-            total += employee.selectedTokens[tokenList[i]].distributionPercent;
-        }
-        return total;
-    }
 }

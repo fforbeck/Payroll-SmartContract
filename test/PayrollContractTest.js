@@ -133,6 +133,15 @@ contract('Payroll', function (accounts) {
         assert.equal(100, result.logs[0].args._totalDistributed.toNumber(), "Total distributed must be 100");
     });
 
+    it("should not allow distribution greater than 100%", async function () {
+        try {
+            await PayrollContract.determineAllocation(tokenA, 101, {from: employeeA});
+        } catch (error) {
+            return true
+        }
+        throw new Error("PayrollContract.determineAllocation function must not allow distribution");
+    });
+
     it("should allow employee to receive the salary on pay day", async function () {
         let result = await PayrollContract.payday(tokenA, {from: employeeA});
         assert.equal("LogPaymentReceived", result.logs[0].event, "Event must be LogPaymentReceived");
