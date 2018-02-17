@@ -23,6 +23,32 @@ contract('Payroll', function (accounts) {
         assert(PayrollContract !== undefined);
     });
 
+    it("should not allow sending ether to payroll contract", async function () {
+        try {
+            await web3.eth.sendTransaction({
+                from: eth.coinbase,
+                to: PayrollContract.address,
+                value: web3.toWei(0.05, "ether")
+            });
+        } catch (error) {
+            return true
+        }
+        throw new Error("Payroll contract must not allow ether transactions");
+    });
+
+    it("should not allow sending ether to EURToken contract", async function () {
+        try {
+            await web3.eth.sendTransaction({
+                from: eth.coinbase,
+                to: EURTokenContract.address,
+                value: web3.toWei(0.05, "ether")
+            });
+        } catch (error) {
+            return true
+        }
+        throw new Error("EURToken contract must not allow ether transactions");
+    });
+
     const ownerAddress = accounts[0];
     const employeeA = accounts[1];
     const yearlyEURSalaryA = 100000;

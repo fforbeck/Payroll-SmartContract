@@ -12,4 +12,8 @@ contract EURToken is BasicToken {
         totalSupply = _initialSupply * 10 ** uint256(decimals);
         balances[msg.sender] = totalSupply;
     }
+
+    /* @dev default fallback function to prevent from sending ether to the contract
+     */
+    function() external payable {revert();}
 }
