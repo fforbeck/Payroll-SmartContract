@@ -1,27 +1,36 @@
 pragma solidity 0.4.19;
 
 import "./PayrollInterface.sol";
-import "./EURToken.sol";
+import "../node_modules/zeppelin-solidity/contracts/token/ERC20/ERC20Basic.sol";
+import "../node_modules/zeppelin-solidity/contracts/math/SafeMath.sol";
 
 contract Payroll is PayrollInterface {
+
+    using SafeMath for uint256;
 
     struct Token {
         address id;
         uint256 exchangeRate;
+    }
+
+    struct Distribution {
+        uint256 amount;
         uint lastAllocationTime;
+    }
+
+    struct Payment {
         uint lastPaymentTime;
-        uint256 distributionPercent;
     }
 
     struct Employee {
         address id;
         uint256 yearlyEURSalary;
         uint256 totalReceivedEUR;
-        address[] allowedTokens;
-        mapping(address => uint256) allowedTokensMap;
-        mapping(address => uint256) pendingWithdraws;
-        mapping(address => Token) selectedTokens;
         uint256 totalDistributed;
+        mapping(address => uint256) allowedTokensMap;
+        mapping(address => Distribution) distributions;
+        mapping(address => Payment) payments;
+        mapping(address => Token) selectedTokens;
     }
 
     /* PAYROLL STATE */
@@ -35,10 +44,12 @@ contract Payroll is PayrollInterface {
     address public oracle;
     uint256 public employeeCount;
 
-    Token private tokenEUR;
-    mapping(address => Token) private tokensMap;
+    mapping(address => Token) private supportedTokensMap;
     mapping(address => Employee) private employeesMap;
+    mapping(address => address[]) private employeeTokenMap;
+
     uint256 private totalYearlyEURSalary;
+
 
     /* CONSTRUCTOR */
     function Payroll(address _defaultOracle, address _tokenEURAddress, uint256 _EURExchangeRate)
@@ -47,7 +58,6 @@ contract Payroll is PayrollInterface {
         owner = msg.sender;
         paymentsState = State.Allowed;
         oracle = _defaultOracle;
-        tokenEUR = Token(_tokenEURAddress, _EURExchangeRate, 0, 0, 0);
         addSupportedToken(_tokenEURAddress, _EURExchangeRate);
     }
 
@@ -59,11 +69,11 @@ contract Payroll is PayrollInterface {
     event LogTokenAllowed(uint _time, address _employeeAddress, address _token, uint256 _exchangeRate);
     event LogPaymentsAllowed(uint _time);
     event LogPaymentsBlocked(uint _time);
-    event LogPaymentReceived(uint _time, address indexed _employeeAddress, address _tokenAddress, uint256 _tokenPayment);
+    event LogPaymentReceived(uint _time, address _employeeAddress, address _tokenAddress, uint256 _tokenPayment);
     event LogExchangeRateUpdated(uint _time, address indexed _token, uint256 _oldRate, uint256 _newRate);
     event LogOracleUpdated(uint _time, address _oldOracle, address _newOracle);
     event LogTokenFundsAdded(uint _time, address _token, uint256 _value);
-    event LogPaymentDistributionUpdated(uint _time, address indexed _employeeAddress, address _token, uint256 _totalDistributed);
+    event LogPaymentDistributionUpdated(uint _time, address _employeeAddress, address _token, uint256 _totalDistributed);
 
 
     /* ACCESS RULES */
@@ -128,8 +138,8 @@ contract Payroll is PayrollInterface {
     onlyByOwner
     {
         require(tokenNotExists(_token) && _exchangeRate > 0);
-        tokensMap[_token] = Token(_token, _exchangeRate, 0, 0, 0);
-        LogSupportedTokenAdded(getTime(), tokensMap[_token].id, tokensMap[_token].exchangeRate);
+        supportedTokensMap[_token] = Token(_token, _exchangeRate);
+        LogSupportedTokenAdded(getTime(), supportedTokensMap[_token].id, supportedTokensMap[_token].exchangeRate);
     }
 
     /* @dev returns ERC20 tokens to contract owner */
@@ -147,7 +157,7 @@ contract Payroll is PayrollInterface {
     onlyByOwner
     returns (uint256)
     {
-        return totalYearlyEURSalary / 12;
+        return totalYearlyEURSalary.div(12);
     }
 
     /* @dev Calculates the days until the contract can run out of funds for the provided token */
@@ -158,7 +168,7 @@ contract Payroll is PayrollInterface {
     onlyIfSupported(_token)
     returns (uint256)
     {
-        return (ERC20Basic(_token).balanceOf(this) / tokensMap[_token].exchangeRate) / calculatePayrollBurnrate();
+        return (ERC20Basic(_token).balanceOf(this).div(supportedTokensMap[_token].exchangeRate)).div(calculatePayrollBurnrate());
     }
 
     /* @dev Changes the contract state to Blocked, so employees won't able to receive payments */
@@ -207,8 +217,8 @@ contract Payroll is PayrollInterface {
     onlyPositive(_initialYearlyEURSalary)
     {
         employeeCount++;
-        totalYearlyEURSalary = totalYearlyEURSalary + _initialYearlyEURSalary;
-        employeesMap[_employeeAddress] = Employee(_employeeAddress, _initialYearlyEURSalary, 0, new address[](0), 0);
+        totalYearlyEURSalary = totalYearlyEURSalary.add(_initialYearlyEURSalary);
+        employeesMap[_employeeAddress] = Employee(_employeeAddress, _initialYearlyEURSalary, 0, 0);
         LogEmployeeAdded(_employeeAddress, _initialYearlyEURSalary, totalYearlyEURSalary);
     }
 
@@ -225,7 +235,7 @@ contract Payroll is PayrollInterface {
         Employee memory employee = employeesMap[_employeeAddress];
         return (employee.yearlyEURSalary,
         employee.totalReceivedEUR,
-        employee.allowedTokens);
+        employeeTokenMap[_employeeAddress]);
     }
 
     /* @dev Removes the employee from the payroll if it is registered in the payroll */
@@ -235,8 +245,9 @@ contract Payroll is PayrollInterface {
     onlyRegistered(_employeeAddress)
     {
         employeeCount = employeeCount - 1;
-        totalYearlyEURSalary = totalYearlyEURSalary - employeesMap[_employeeAddress].yearlyEURSalary;
+        totalYearlyEURSalary = totalYearlyEURSalary.sub(employeesMap[_employeeAddress].yearlyEURSalary);
         delete employeesMap[_employeeAddress];
+        delete employeeTokenMap[_employeeAddress];
         LogEmployeeRemoved(_employeeAddress);
     }
 
@@ -248,7 +259,7 @@ contract Payroll is PayrollInterface {
     onlyPositive(_newYearlyEURSalary)
     {
         uint256 oldSalary = employeesMap[_employeeAddress].yearlyEURSalary;
-        totalYearlyEURSalary = totalYearlyEURSalary - oldSalary + _newYearlyEURSalary;
+        totalYearlyEURSalary = totalYearlyEURSalary.sub(oldSalary).add(_newYearlyEURSalary);
         employeesMap[_employeeAddress].yearlyEURSalary = _newYearlyEURSalary;
         LogEmployeeSalaryUpdated(_employeeAddress, oldSalary, _newYearlyEURSalary, totalYearlyEURSalary);
     }
@@ -262,26 +273,28 @@ contract Payroll is PayrollInterface {
         return employeeCount;
     }
 
-    /* @dev Gets the employee payment details based on token */
+    /* @dev Gets the employee payment details based on allowed token */
     function getEmployeePayment(address _employeeAddress, address _token)
     external
     constant
     onlyByOwner
     onlyRegistered(_employeeAddress)
     onlyIfSupported(_token)
+    onlyIfAllowed(_token)
     returns (
         uint256 _exchangeRate,
         uint _lastAllocationTime,
         uint _lastPaymentTime,
-        uint256 _distributionPercent)
+        uint256 _distributedAmount)
     {
         Token memory token = employeesMap[_employeeAddress].selectedTokens[_token];
-        require(token.id != address(0x0));
+        Payment memory payment = employeesMap[_employeeAddress].payments[_token];
+        Distribution memory distribution = employeesMap[_employeeAddress].distributions[_token];
 
         return (token.exchangeRate,
-        token.lastAllocationTime,
-        token.lastPaymentTime,
-        token.distributionPercent);
+        distribution.lastAllocationTime,
+        payment.lastPaymentTime,
+        distribution.amount);
     }
 
     /* @dev Allows a given token for a given employee */
@@ -292,15 +305,11 @@ contract Payroll is PayrollInterface {
     onlyIfSupported(_token)
     onlyPositive(_exchangeRate)
     {
-         Employee storage employee = employeesMap[_employeeAddress];
-         tokensMap[_token] = Token(_token, _exchangeRate, 0, 0, 0);
-         employee.selectedTokens[_token] = tokensMap[_token];
+        Employee storage employee = employeesMap[_employeeAddress];
+        supportedTokensMap[_token] = Token(_token, _exchangeRate);
+        employee.selectedTokens[_token] = supportedTokensMap[_token];
 
-        if (employee.allowedTokens.length == 0) {
-            employee.allowedTokens = new address[](0);
-        }
-
-        employee.allowedTokens.push(_token);
+        employeeTokenMap[_employeeAddress].push(_token);
         employee.allowedTokensMap[_token] = 1;
 
         LogTokenAllowed(getTime(), _employeeAddress, _token, _exchangeRate);
@@ -309,23 +318,29 @@ contract Payroll is PayrollInterface {
     /* EMPLOYEE ONLY */
 
     /* @dev Allows employees to set their tokens distribution for payments */
-    function determineAllocation(address _token, uint256 _distributionPercent)
+    function determineAllocation(address _token, uint256 _newDistributionAmount)
     external
     onlyByEmployee
     onlyIfPayments(State.Allowed)
     onlyIfAllowed(_token)
     {
+        require(_newDistributionAmount >= 0 && _newDistributionAmount <= employee.yearlyEURSalary.div(12));
+
         Employee storage employee = employeesMap[msg.sender];
-        require(_distributionPercent >= 0 && employee.totalDistributed + _distributionPercent <= 100);
+        Distribution storage distribution = employee.distributions[_token];
 
-        Token storage token = employee.selectedTokens[_token];
-        require(getTime() - 6 * 4 weeks > token.lastAllocationTime);
+        require(getTime() - 6 * 4 weeks > distribution.lastAllocationTime);
 
-        token.distributionPercent = _distributionPercent;
-        token.lastAllocationTime = getTime();
-        employee.totalDistributed += _distributionPercent;
+        uint256 oldAmount = distribution.amount;
+        distribution.amount = _newDistributionAmount;
+        distribution.lastAllocationTime = getTime();
 
-        LogPaymentDistributionUpdated(getTime(), employee.id, token.id, token.distributionPercent);
+        employee.totalDistributed.sub(oldAmount);
+        employee.totalDistributed.add(_newDistributionAmount);
+
+        assert(employee.totalDistributed <= employee.yearlyEURSalary.div(12));
+
+        LogPaymentDistributionUpdated(getTime(), employee.id, _token, distribution.amount);
     }
 
     /* @dev  Allows the employee to release the funds once a month*/
@@ -333,26 +348,24 @@ contract Payroll is PayrollInterface {
     external
     onlyByEmployee
     onlyIfPayments(State.Allowed)
+    onlyIfSupported(_token)
     onlyIfAllowed(_token)
     {
         Employee storage employee = employeesMap[msg.sender];
-        Token storage token = employee.selectedTokens[_token];
-        require(getTime() - 1 * 4 weeks > token.lastPaymentTime);
+        Payment storage payment = employee.payments[_token];
+        require(getTime() - 1 * 4 weeks > payment.lastPaymentTime);
 
-        uint256 distributedEURSalary = (employee.yearlyEURSalary / 12) * (token.distributionPercent / 100);
-        uint256 tokenSalary = distributedEURSalary / token.exchangeRate;
+        Distribution memory distribution = employee.distributions[_token];
+        uint256 monthlySalary = employee.yearlyEURSalary.div(12);
+        require(distribution.amount > 0 && distribution.amount <= monthlySalary);
+
+        uint256 tokenSalary = distribution.amount.div(supportedTokensMap[_token].exchangeRate);
         uint256 tokenFunds = ERC20Basic(_token).balanceOf(this);
-        require(tokenSalary <  tokenFunds);
+        assert(monthlySalary.sub(distribution.amount) >= 0 && tokenSalary < tokenFunds);
 
-        employee.pendingWithdraws[token.id] = tokenSalary;
-        token.lastPaymentTime = getTime();
-
-        employeesMap[msg.sender] = employee;
-
+        payment.lastPaymentTime = getTime();
         LogPaymentReceived(getTime(), msg.sender, _token, tokenSalary);
-
-        require(ERC20Basic(_token).transfer(msg.sender, tokenSalary));
-
+        assert(ERC20Basic(_token).transfer(msg.sender, tokenSalary));
     }
 
     /* ORACLE ONLY */
@@ -363,12 +376,8 @@ contract Payroll is PayrollInterface {
     onlyByOracle
     onlyIfSupported(_token)
     {
-        //Updates the default EUR token
-        if (_token == tokenEUR.id) {
-            tokenEUR.exchangeRate = _newExchangeRate;
-        }
         //Updates the token in the supported tokens map
-        Token storage token = tokensMap[_token];
+        Token storage token = supportedTokensMap[_token];
         uint256 oldRate = token.exchangeRate;
         token.exchangeRate = _newExchangeRate;
         LogExchangeRateUpdated(getTime(), _token, oldRate, token.exchangeRate);
@@ -391,7 +400,7 @@ contract Payroll is PayrollInterface {
     constant
     returns (bool)
     {
-        return tokensMap[_token].id != address(0x0);
+        return supportedTokensMap[_token].id != address(0x0);
     }
 
     function tokenNotExists(address _token)
@@ -399,7 +408,7 @@ contract Payroll is PayrollInterface {
     constant
     returns (bool)
     {
-        return tokensMap[_token].id == address(0x0);
+        return supportedTokensMap[_token].id == address(0x0);
     }
 
     function getTime()

@@ -38,12 +38,12 @@ function getEmployeePayment(address _employeeAddress, address _token) external c
     uint256 _EURExchangeRate,
     uint _lastAllocationTime,
     uint _lastPaymentTime,
-    uint256 _distributionPercent);
+    uint256 _distributionMontlyAmount);
 ```
 
 ### Employee Functions
 ```solidity
-function determineAllocation(address _token, uint256 _distributionInPercent) external; // only callable once every 6 months
+function determineAllocation(address _token, uint256 _distributionMontlyAmount) external; // only callable once every 6 months
 function payday(address _token) external; // only callable once a month and releases the funds according to distribution so employee can withdraw
 ```
 
