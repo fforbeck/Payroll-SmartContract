@@ -147,11 +147,7 @@ contract('Payroll', function (accounts) {
 
     it("should calculate the days left to run out of funds", async function () {
         let result = await PayrollContract.calculatePayrollRunway(tokenEUR, {from: ownerAddress});
-        let payrollBalance = await EURTokenContract.balanceOf.call(PayrollContract.address);
-        var exchangeRateEUR = 1;
-        var fundsEUR = payrollBalance / exchangeRateEUR;
-        var expectedDays = fundsEUR / (yearlyEURSalaryB / 12);
-        assert.equal(expectedDays, result.toNumber(), "Days left to run out of funds must be equal to " + expectedDays);
+        assert.equal(3048, result.toNumber(), "Days left to run out of funds must be 3048");
     });
 
     it("should block the payments", async function () {

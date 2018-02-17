@@ -168,7 +168,7 @@ contract Payroll is PayrollInterface {
     onlyIfSupported(_token)
     returns (uint256)
     {
-        return (ERC20Basic(_token).balanceOf(this).div(supportedTokensMap[_token].exchangeRate)).div(calculatePayrollBurnrate());
+        return (ERC20Basic(_token).balanceOf(this).div(supportedTokensMap[_token].exchangeRate)).div(totalYearlyEURSalary.div(365));
     }
 
     /* @dev Changes the contract state to Blocked, so employees won't able to receive payments */
