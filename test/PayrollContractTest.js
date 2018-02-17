@@ -8,6 +8,12 @@ contract('Payroll', function (accounts) {
     const defaultOracleAddress = web3.eth.accounts[8];
     const defaultEURExchangeRate = 1;
     const tokenSupply = 1000000;
+    const ownerAddress = accounts[0];
+    const employeeA = accounts[1];
+    const yearlyEURSalaryA = 100000;
+    const yearlyEURSalaryB = 120000;
+    const newOracleAddress = accounts[6];
+
     let PayrollContract;
     let EURTokenContract;
     let tokenA;
@@ -48,12 +54,6 @@ contract('Payroll', function (accounts) {
         }
         throw new Error("EURToken contract must not allow ether transactions");
     });
-
-    const ownerAddress = accounts[0];
-    const employeeA = accounts[1];
-    const yearlyEURSalaryA = 100000;
-    const yearlyEURSalaryB = 120000;
-    const newOracleAddress = accounts[6];
 
     it("should be initialized with zero employees", async function () {
         let count = await PayrollContract.getEmployeeCount({from: ownerAddress});
