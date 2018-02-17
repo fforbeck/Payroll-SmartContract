@@ -64,7 +64,6 @@ contract Payroll is PayrollInterface {
     event LogOracleUpdated(uint _time, address _oldOracle, address _newOracle);
     event LogTokenFundsAdded(uint _time, address _token, uint256 _value);
     event LogPaymentDistributionUpdated(uint _time, address indexed _employeeAddress, address _token, uint256 _totalDistributed);
-    event LogDebug(uint _time, string data);
 
 
     /* ACCESS RULES */
