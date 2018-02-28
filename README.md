@@ -1,11 +1,11 @@
 [![Build Status](https://travis-ci.com/fforbeck/Payroll-SmartContract.svg?token=QwGVaghZwghs8qEgGeyu&branch=master)](https://travis-ci.com/fforbeck/Payroll-SmartContract)
 
 # Payroll Smart Contract
-This is a solidity smart contract to manage a payroll based on ERC20 tokens. The contract owner may
-add the supported tokens into the contract and allow different types of tokens for each employee, so they can received their payments in tokens.
-The default token supported is the EURT, which is a token that represents the EUR currency. Any transaction that attempts to send ether to the Payroll contract will be reverted.
-Employees, on the other hand, can receive the payment once a month and every six months they are allowed to define what is the salary distribution for each of the allowed tokens.
-Besides that, the owner is able to block/allow payments in case of an emergency. Additional information about each employee and supported tokens is also available.
+This is a solidity smart contract to manage an employee payroll based on ERC20 tokens. The contract owner may
+add new supported tokens into the contract and whitelist different types of tokens for each employee, so they can withdraw their payments in tokens according to a distribution that is set by the employee.
+The default token supported is the EURT, which is a token that represents the EUR currency. I also added the USD Token, USDT. Any transaction that attempts to send ether to the Payroll contract will be reverted. Ether is not allowed.
+Employees, on the other hand, are allowed to withdraw the payment once a month and every six months they are can to define what is the token salary distribution for the whitelisted tokens.
+Besides that, the contract owner is able to block/allow payments in case of an emergency. Additional information about each employee, payments, distributions and supported tokens are also available.
 
 
 
@@ -54,13 +54,12 @@ function setExchangeRate(address _token, uint256 _newEURExchangeRate) external; 
 
 ### Considerations
  - Instead of passing a list of tokens with an arbitrary size to calculate 
- the distribution or receive payments, 
-, I changed to one token at time to prevent problems with maximum block size.
- - Added destroy function to terminate the contract and return the funds to its owner.
- - Implemented a very basic ERC20 EURT token without allowance in order to transfer token funds using
- a token contract. It is the default token. More tokens can be added.
- - Assumed we can trust 100% in the oracle exchange rates.
- - The contract relies on a default oracle address and default EUR token address provided via constructor.
- - Added fallback functions for token and ether.
+ the distribution or receive payments, it prevents problems with maximum block size with an array of arbitraty length;
+ - The destroy function terminates the contract and returns the funds to the contract owner;
+ - Implemented a very basic ERC20 EURT and USDT tokens without allowance in order to transfer token funds using
+ a token contract. The EURT is the default token. More tokens can be easily added;
+ - Assumed we can trust 100% in the oracle exchange rates; It can be improved later;
+ - The contract relies on a default oracle address and default EURT address provided via constructor args;
+ - Added fallback functions for token and ether;
  - The test accounts are available on `script/ganache-cli.sh` script which uses custom balances to 
  execute the truffle test `test/PayrollContractTest.js`.
