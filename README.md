@@ -3,9 +3,12 @@
 # Payroll Smart Contract
 This is a solidity smart contract to manage an employee payroll based on ERC20 tokens. The contract owner may
 add new supported tokens into the contract and whitelist different types of tokens for each employee, so they can withdraw their payments in tokens according to a distribution that is set by the employee.
+
 The default token supported is the EURT, which is a token that represents the EUR currency. I also added the USD Token, USDT. Any transaction that attempts to send ether to the Payroll contract will be reverted. Ether is not allowed.
-Employees, on the other hand, are allowed to withdraw the payment once a month and every six months they are can to define what is the token salary distribution for the whitelisted tokens.
-Besides that, the contract owner is able to block/allow payments in case of an emergency. Additional information about each employee, payments, distributions and supported tokens are also available.
+
+Employees are allowed to withdraw their payment only once a month and, each six months they can define a new token distribution, but for the whitelisted tokens.
+
+Besides that, the contract owner is able to block/allow payments in case of an emergency. Additional information about each employee, payments, distributions and supported tokens is available.
 
 
 
