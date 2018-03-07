@@ -88,10 +88,10 @@ function setExchangeRate(address _token, uint256 _newEURExchangeRate) external; 
 
 ### Considerations
  - Instead of passing a list of tokens with an arbitrary size to calculate 
- the distribution or receive payments, it prevents problems with maximum block size with an array of arbitraty length;
+ the distribution or receive payments, it now accepts only 1 token at time, so it prevents problems with maximum block size and we don't have to implement loop caching for arrays with arbitraty length;
  - The destroy function terminates the contract and returns the funds to the contract owner;
  - Implemented a very basic ERC20 EURT and USDT tokens without allowance in order to transfer token funds using
- a token contract. The EURT is the default token. More tokens can be easily added;
+ a token contract. The EURT is the default token. More tokens can be easily added; It is based on tokens from Open Zeppelin lib;
  - Assumed we can trust 100% in the oracle exchange rates; It can be improved later;
  - The contract relies on a default oracle address and default EURT address provided via constructor args;
  - Added fallback functions for token and ether;
